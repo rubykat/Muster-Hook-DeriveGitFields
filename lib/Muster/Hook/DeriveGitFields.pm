@@ -74,6 +74,11 @@ sub process {
     # Do derivations
     # -----------------------------------------
 
+    # Date the page was added to the repo
+    # The --format=%as gives the "author date" in short format
+    my @log_lines = $self->{git}->RUN('log','--diff-filter=A','--format=%as','-1',$leaf->{file});
+    $meta->{date_added} = $log_lines[0];
+
     $leaf->{meta} = $meta;
 
     return $leaf;
