@@ -19,6 +19,7 @@ use Mojo::Base 'Muster::Hook';
 use Muster::Hooks;
 use Muster::LeafFile;
 use Git::Wrapper;
+use Try::Tiny;
 use YAML::Any;
 use Carp;
 
@@ -77,22 +78,34 @@ sub process {
     # Date the page was added to the repo
     # Need to use '--follow' for renames, even though sometimes it goes too far back
     # The --format=%as gives the "author date" in short format
-    my @log_lines = $self->{git}->RUN('log',
-        '--diff-filter=A',
-        '--format=%as',
-        '--follow',
-        '-1',
-        '--',$leaf->{filename});
-    $meta->{date_added} = $log_lines[0];
+    my @log_lines = ();
+    try {
+        @log_lines = $self->{git}->RUN('log',
+            '--diff-filter=A',
+            '--format=%as',
+            '--follow',
+            '-1',
+            '--',$leaf->{filename});
+    }
+    catch {
+        print $_->error;
+    };
+    $meta->{date_added} = $log_lines[0] if $log_lines[0];
 
     # and the datetime added
-    @log_lines = $self->{git}->RUN('log',
-        '--diff-filter=A',
-        '--format=%ai',
-        '--follow',
-        '-1',
-        '--',$leaf->{filename});
-    $meta->{datetime_added} = $log_lines[0];
+    @log_lines = ();
+    try {
+        @log_lines = $self->{git}->RUN('log',
+            '--diff-filter=A',
+            '--format=%ai',
+            '--follow',
+            '-1',
+            '--',$leaf->{filename});
+    }
+    catch {
+        print $_->error;
+    };
+    $meta->{datetime_added} = $log_lines[0] if $log_lines[0];
 
     $leaf->{meta} = $meta;
 
