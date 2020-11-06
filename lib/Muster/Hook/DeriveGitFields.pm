@@ -18,10 +18,10 @@ in the config section for this hook.
 use Mojo::Base 'Muster::Hook';
 use Muster::Hooks;
 use Muster::LeafFile;
-use Git::Wrapper;
-use Try::Tiny;
+use IPC::System::Simple qw(capture);
 use YAML::Any;
 use Carp;
+use Cwd;
 
 =head1 METHODS
 
@@ -36,7 +36,6 @@ sub register {
     my $conf = shift;
 
     $self->{config} = $conf->{hook_conf}->{'Muster::Hook::DeriveGitFields'};
-    $self->{git} = Git::Wrapper->new($self->{config}->{repo_dir});
 
     $hookmaster->add_hook('derivegitfields' => sub {
             my %args = @_;
@@ -68,44 +67,31 @@ sub process {
     {
         return $leaf;
     }
+    # Do nothing if the repo does not exist
+    if (! -d $self->{config}->{repo_dir})
+    {
+        return $leaf;
+    }
 
     my $meta = $leaf->meta;
 
     # -----------------------------------------
     # Do derivations
     # -----------------------------------------
+    # NOTE: I tried using Git::Wrapper but it kept on failing,
+    # so I am doing a system call instead.
+    # Okay, so THAT does not work either.
+    # This will never work when it is called inside a git hook. (sigh)
 
     # Date the page was added to the repo
     # Need to use '--follow' for renames, even though sometimes it goes too far back
     # The --format=%as gives the "author date" in short format
     my @log_lines = ();
-    try {
-        @log_lines = $self->{git}->RUN('log',
-            '--diff-filter=A',
-            '--format=%as',
-            '--follow',
-            '-1',
-            '--',$leaf->{filename});
-    }
-    catch {
-        print $_->error;
-    };
+    my $cmd = sprintf('git -C %s log --diff-filter=A --format=%%as --follow -1 -- %s',
+        $self->{config}->{repo_dir},
+        $leaf->{filename});
+    @log_lines = capture($cmd);
     $meta->{date_added} = $log_lines[0] if $log_lines[0];
-
-    # and the datetime added
-    @log_lines = ();
-    try {
-        @log_lines = $self->{git}->RUN('log',
-            '--diff-filter=A',
-            '--format=%ai',
-            '--follow',
-            '-1',
-            '--',$leaf->{filename});
-    }
-    catch {
-        print $_->error;
-    };
-    $meta->{datetime_added} = $log_lines[0] if $log_lines[0];
 
     $leaf->{meta} = $meta;
 
